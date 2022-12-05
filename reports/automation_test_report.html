@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>automation_test_report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>automation_test_report.html</h1>
+    <p>Report generated on 05-Dec-2022 at 13:23:16 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "pytest": "7.2.0"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19044-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"Faker": "15.0.0", "bdd": "6.1.1", "html": "3.2.0", "metadata": "2.0.4"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.5</td></tr></table>
+    <h2>Summary</h2>
+    <p>8 tests ran in 207.76 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">8 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">BASIC_SELENIUM_PROJECT_test.py::Test_BasicSeleniumProject::test_basic_selenium_project</td>
+          <td class="col-duration">34.54</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:35 Mouse overed on to Aksesuar.
+INFO     base.base_driver:navbar.py:38 Clicked to Plaj Havlusu link.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/etiket/plaj-havlusu is contain plaj-havlusu
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/etiket/plaj-havlusu is contain plaj-havlusu
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:shop_page.py:55 Navigated to any shop page.
+INFO     base.base_driver:shop_page.py:57 Clicked to any item in the shop page, navigating to chosen product page
+INFO     base.base_driver:base_driver.py:61 Assertion accepted : ürün kodu: == ürün kodu
+INFO     base.base_driver:product_page.py:28 Chose random variation if it is exist.
+INFO     base.base_driver:product_page.py:22 Navigated to a product page.
+INFO     base.base_driver:product_page.py:24 Current product added to cart.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/sepetim is contain sepetim
+INFO     base.base_driver:navbar.py:26 Navigating to my cart section.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/sepetim is contain sepetim
+INFO     base.base_driver:my_cart_page.py:17 Navigated to my cart page.
+INFO     base.base_driver:my_cart_page.py:22 1 product in the cart.
+INFO     base.base_driver:base_driver.py:69 Assertion accepted : 1 == 1
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr is contain https://www.lcwaikiki.com/tr-tr/tr
+INFO     base.base_driver:mainpage.py:17 Navigated to mainpage.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC02_SHOP_PAGE_test.py::Test_TC02_SHOP_PAGE::test_tc02_listed_product_quantity</td>
+          <td class="col-duration">34.59</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;blazer&quot;
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=blazer is contain blazer
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=blazer is contain blazer
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:shop_page.py:62 Products counted and returned.
+INFO     base.base_driver:base_driver.py:69 Assertion accepted : 96 == 96<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC03_SHOP_PAGE_test.py::Test_TC03_SHOP_PAGE::test_tc03_product_counts_in_filter</td>
+          <td class="col-duration">37.03</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;jogger&quot;
+INFO     base.base_driver:shop_page.py:50 Clicked to XL filter.
+INFO     base.base_driver:base_driver.py:61 Assertion accepted : xl == xl
+INFO     base.base_driver:shop_page.py:52 Products filtered for XL variation.
+INFO     base.base_driver:shop_page.py:80 678 products found in XL variation.
+INFO     base.base_driver:base_driver.py:69 Assertion accepted : 678 == 678<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC04_SHOP_PAGE_test.py::Test_TC04_SHOP_PAGE::test_TC04_sorting_function_highest</td>
+          <td class="col-duration">23.74</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;bere&quot;
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=bere is contain bere
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=bere is contain bere
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:shop_page.py:33 Clicked to dropdown menu.
+INFO     base.base_driver:shop_page.py:36 Clicked to highly price sorting method
+INFO     base.base_driver:base_driver.py:61 Assertion accepted : en yüksek fiyat == en yüksek fiyat
+INFO     base.base_driver:shop_page.py:38 Products sorted for highly price
+INFO     base.base_driver:shop_page.py:95 Product prices sorted correctly.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr is contain https://www.lcwaikiki.com/tr-tr/tr
+INFO     base.base_driver:mainpage.py:17 Navigated to mainpage.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC04_SHOP_PAGE_test.py::Test_TC04_SHOP_PAGE::test_TC04_sorting_function_lowest</td>
+          <td class="col-duration">22.93</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;bere&quot;
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=bere is contain bere
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=bere is contain bere
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:shop_page.py:33 Clicked to dropdown menu.
+INFO     base.base_driver:shop_page.py:41 Clicked to lowest price sorting method
+INFO     base.base_driver:base_driver.py:61 Assertion accepted : en düþük fiyat == en düþük fiyat
+INFO     base.base_driver:shop_page.py:43 Products sorted for lowest price
+INFO     base.base_driver:shop_page.py:95 Product prices sorted correctly.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC05_SHOP_PAGE_test.py::Test_TC05_SHOP_PAGE::test_tc05_product_counts_of_filters_in_the_header</td>
+          <td class="col-duration">21.67</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;spor&quot;
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=spor is contain spor
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=spor is contain spor
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:shop_page.py:74 11369 products gathered.
+INFO     base.base_driver:base_driver.py:69 Assertion accepted : 11369 == 11369<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC06_SHOP_PAGE_test.py::Test_TC05_SHOP_PAGE::test_tc06_search_function</td>
+          <td class="col-duration">27.88</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:navbar.py:31 Searched for &quot;jean&quot;
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=jean is contain jean
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/arama?q=jean is contain jean
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TC06_SHOP_PAGE_test.py::Test_TC05_SHOP_PAGE::test_tc06_category_function</td>
+          <td class="col-duration">5.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr is contain https://www.lcwaikiki.com/tr-tr/tr
+INFO     base.base_driver:mainpage.py:17 Navigated to mainpage.
+INFO     base.base_driver:navbar.py:35 Mouse overed on to Aksesuar.
+INFO     base.base_driver:navbar.py:38 Clicked to Plaj Havlusu link.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/etiket/plaj-havlusu is contain plaj-havlusu
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.
+INFO     base.base_driver:base_driver.py:77 Assertion accepted : https://www.lcwaikiki.com/tr-tr/tr/etiket/plaj-havlusu is contain plaj-havlusu
+INFO     base.base_driver:shop_page.py:99 Categorized product name in the url and around the products.<br/></div></td></tr></tbody></table></body></html>
